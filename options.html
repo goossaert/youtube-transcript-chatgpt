@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>YouTube → ChatGPT options</title>
+  <style>
+    body{font-family:sans-serif;padding:20px;max-width:600px;margin:0 auto;}
+    label{display:block;margin-top:1rem;font-weight:600;}
+    textarea,input{width:100%;}
+    textarea{min-height:500px;}
+    small{color:#666;}
+  </style>
+</head>
+<body>
+  <h1>Extension settings</h1>
+  <label> Default prompt
+    <textarea id="prompt" rows="3"></textarea>
+  </label>
+  <label> ChatGPT model slug <small>(e.g. <code>gpt-4o</code>, <code>gpt-4</code>)</small>
+    <input id="model" type="text" />
+  </label>
+  <br/>
+  <br/>
+  <button id="save">Save</button>
+  <script src="options.js"></script>
+</body>
+</html>
