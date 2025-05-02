@@ -30,11 +30,11 @@ async function injectPrompt(tabId, text) {
     target: { tabId },
     args: [text],
     func: (payload) => {
-      const textarea = document.querySelector("textarea");
-      if (!textarea) return;
-      textarea.value = payload;
-      textarea.dispatchEvent(new Event("input", { bubbles: true }));
-      textarea.focus();
+      const promptDiv = document.querySelector("#prompt-textarea");
+      if (!promptDiv) return;
+      promptDiv.innerHTML   = "<p>" + payload.replace(/\n/g, '</p><p>') + "</p>";
+      promptDiv.dispatchEvent(new InputEvent("input", { bubbles: true }));
+      promptDiv.focus();
     }
   });
 }
@@ -57,11 +57,11 @@ async function injectPrompt(tabId, text) {
 
       let tries = 0;
       (function tryInject() {
-        const textarea = document.querySelector("textarea");
-        if (textarea) {
-          textarea.value = payload;
-          textarea.dispatchEvent(new Event("input", { bubbles: true }));
-          textarea.focus();
+        const promptDiv = document.querySelector("#prompt-textarea");
+        if (promptDiv) {
+          promptDiv.innerHTML   = "<p>" + payload.replace(/\n/g, '</p><p>') + "</p>";
+          promptDiv.dispatchEvent(new InputEvent("input", { bubbles: true }));
+          promptDiv.focus();
         } else if (++tries < MAX_TRIES) {
           setTimeout(tryInject, INTERVAL);
         }
