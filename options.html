@@ -13,9 +13,12 @@
 </head>
 <body>
   <h1>Extension settings</h1>
-  <label> Default prompt
-    <textarea id="prompt" rows="3"></textarea>
-  </label>
+  <form id="promptsForm">
+    <h2>Prompts</h2>
+    <div id="promptsContainer"></div>
+    <button type="button" id="addPrompt">Add prompt</button>
+    <small>You can add up to 5 prompts. One must be marked as default.</small>
+  </form>
   <label> ChatGPT model slug <small>(e.g. <code>gpt-4o</code>, <code>gpt-4</code>)</small>
     <input id="model" type="text" />
   </label>

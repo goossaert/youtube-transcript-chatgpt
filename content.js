@@ -183,3 +183,72 @@ function waitFor(predicate, timeout = 6000, step = 100) {
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms));
+
+// Overlay for prompt selection
+function showPromptOverlay(prompts) {
+  return new Promise((resolve) => {
+    // Remove any existing overlay
+    const old = document.getElementById('ytgpt-prompt-overlay');
+    if (old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'ytgpt-prompt-overlay';
+    overlay.style = `
+      position: fixed; z-index: 99999; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center;`;
+    const modal = document.createElement('div');
+    modal.style = `background: #fff; padding: 2em; border-radius: 12px; max-width: 90vw; width: 400px; box-shadow: 0 8px 32px #0003;`;
+    modal.innerHTML = `<h2>Select a prompt</h2><ul style="list-style:none;padding:0;max-height:300px;overflow:auto;">
+      ${prompts.map((p, i) => `
+        <li style="margin-bottom:1em;">
+          <button data-idx="${i}" style="width:100%;text-align:left;padding:1em;border-radius:8px;border:1px solid #ccc;background:#f9f9f9;cursor:pointer;">
+            <b>${p.name || 'Prompt ' + (i+1)}</b><br/>
+            <small>${p.content.slice(0, 80).replace(/\n/g, ' ')}${p.content.length > 80 ? '…' : ''}</small>
+            ${p.default ? '<span style="color:green;float:right;">(default)</span>' : ''}
+          </button>
+        </li>`).join('')}
+    </ul>
+    <div style="text-align:right;"><button id="ytgpt-cancel">Cancel</button></div>`;
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    let resolved = false;
+    function cleanup() {
+      if (!resolved) {
+        resolved = true;
+        overlay.remove();
+      }
+    }
+    // Click handler
+    modal.querySelectorAll('button[data-idx]').forEach(btn => {
+      btn.onclick = () => {
+        cleanup();
+        resolve(parseInt(btn.getAttribute('data-idx')));
+      };
+    });
+    // Cancel button
+    modal.querySelector('#ytgpt-cancel').onclick = () => {
+      cleanup();
+      resolve(null);
+    };
+    // Keyboard navigation
+    overlay.tabIndex = -1;
+    overlay.focus();
+    overlay.onkeydown = (e) => {
+      if (e.key === 'Escape') {
+        cleanup();
+        resolve(null);
+      }
+    };
+  });
+}
+
+// Listen for prompt selection request
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.action === 'selectPrompt') {
+    showPromptOverlay(msg.prompts).then(idx => {
+      sendResponse({ selectedIdx: idx });
+    });
+    return true;
+  }
+});

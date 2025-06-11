@@ -120,6 +120,23 @@
     let formattedContent = `<article class="entry-content">${content}</article>`;
     console.log('[publisher.js] Sending to Wallabag:', formattedContent);
     const token = await getWallabagToken(settings);
+    // Extract YouTube video ID from the title/url in the content (look for https://www.youtube.com/watch?v=VIDEO_ID)
+    let videoId = null;
+    const urlMatch = content.match(/https:\/\/www\.youtube\.com\/watch\?v=([\w-]{11})/);
+    if (urlMatch) {
+      videoId = urlMatch[1];
+    }
+    // Fallback: try to extract from any youtube.com URL
+    if (!videoId) {
+      const anyMatch = content.match(/youtube\.com\/(?:watch\?v=|embed\/|shorts\/)([\w-]{11})/);
+      if (anyMatch) videoId = anyMatch[1];
+    }
+    // Generate a 6-character base36 unique ID
+    const uniqueId = Math.random().toString(36).slice(2, 8);
+    let summaryUrl = 'https://youtube-summary.com/';
+    if (videoId) {
+      summaryUrl = `https://youtube-summary.com/youtube-id/${videoId}/unique-summary-id/${uniqueId}`;
+    }
     const resp = await fetch(`${settings.wallabagUrl}/api/entries.json`, {
       method: "POST",
       headers: {
@@ -129,7 +146,7 @@
       body: JSON.stringify({
         title: title,
         content: formattedContent,
-        url: "https://youtube-summary.com/" // or the video URL if you want
+        url: summaryUrl
       })
     });
     const text = await resp.text();
