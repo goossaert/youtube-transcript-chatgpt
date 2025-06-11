@@ -20,10 +20,13 @@
     <input id="model" type="text" />
   </label>
   <label><input type="checkbox" id="sendPublisher" checked> Send to Publisher endpoint</label>
+  <label>Publisher endpoint URL
+    <input id="publisherUrl" type="text" placeholder="https://your.publisher.instance.com/" />
+  </label>
   <label><input type="checkbox" id="sendWallabag"> Send to Wallabag</label>
   <div id="wallabagFields" style="display:none; margin-left:1em;">
     <label>Wallabag URL
-      <input id="wallabagUrl" type="text" placeholder="https://your.wallabag.instance" />
+      <input id="wallabagUrl" type="text" placeholder="https://your.wallabag.instance.com" />
     </label>
     <label>Client ID
       <input id="wallabagClientId" type="text" />

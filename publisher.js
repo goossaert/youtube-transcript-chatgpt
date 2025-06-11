@@ -49,13 +49,14 @@
       wallabagClientId: '',
       wallabagClientSecret: '',
       wallabagUsername: '',
-      wallabagPassword: ''
+      wallabagPassword: '',
+      publisherUrl: ''
     }, async (settings) => {
       // Send to Publisher if enabled
       if (settings.sendPublisher) {
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '';
+        form.action = settings.publisherUrl;
         form.target = '_blank';
         const inputTitle = document.createElement('input');
         inputTitle.type = 'hidden';

@@ -8,6 +8,7 @@ const wallabagClientIdEl = document.getElementById("wallabagClientId");
 const wallabagClientSecretEl = document.getElementById("wallabagClientSecret");
 const wallabagUsernameEl = document.getElementById("wallabagUsername");
 const wallabagPasswordEl = document.getElementById("wallabagPassword");
+const publisherUrlEl = document.getElementById("publisherUrl");
 
 // Show/hide Wallabag fields
 sendWallabagEl.addEventListener("change", () => {
@@ -24,7 +25,8 @@ chrome.storage.sync.get({
   wallabagClientId: "",
   wallabagClientSecret: "",
   wallabagUsername: "",
-  wallabagPassword: ""
+  wallabagPassword: "",
+  publisherUrl: ""
 }, (opts) => {
   promptEl.value = opts.prompt;
   modelEl.value = opts.model;
@@ -36,6 +38,7 @@ chrome.storage.sync.get({
   wallabagClientSecretEl.value = opts.wallabagClientSecret;
   wallabagUsernameEl.value = opts.wallabagUsername;
   wallabagPasswordEl.value = opts.wallabagPassword;
+  publisherUrlEl.value = opts.publisherUrl;
 });
 
 // Save
@@ -49,7 +52,8 @@ document.getElementById("save").addEventListener("click", () => {
     wallabagClientId: wallabagClientIdEl.value,
     wallabagClientSecret: wallabagClientSecretEl.value,
     wallabagUsername: wallabagUsernameEl.value,
-    wallabagPassword: wallabagPasswordEl.value
+    wallabagPassword: wallabagPasswordEl.value,
+    publisherUrl: publisherUrlEl.value
   });
   alert("Saved ✅ — remember you can change the shortcut in chrome://extensions/shortcuts");
 });
