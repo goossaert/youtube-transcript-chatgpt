@@ -19,6 +19,25 @@
   <label> ChatGPT model slug <small>(e.g. <code>gpt-4o</code>, <code>gpt-4</code>)</small>
     <input id="model" type="text" />
   </label>
+  <label><input type="checkbox" id="sendPublisher" checked> Send to Publisher endpoint</label>
+  <label><input type="checkbox" id="sendWallabag"> Send to Wallabag</label>
+  <div id="wallabagFields" style="display:none; margin-left:1em;">
+    <label>Wallabag URL
+      <input id="wallabagUrl" type="text" placeholder="https://your.wallabag.instance" />
+    </label>
+    <label>Client ID
+      <input id="wallabagClientId" type="text" />
+    </label>
+    <label>Client Secret
+      <input id="wallabagClientSecret" type="text" />
+    </label>
+    <label>Username
+      <input id="wallabagUsername" type="text" />
+    </label>
+    <label>Password
+      <input id="wallabagPassword" type="password" />
+    </label>
+  </div>
   <br/>
   <br/>
   <button id="save">Save</button>

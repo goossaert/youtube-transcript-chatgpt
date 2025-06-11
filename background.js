@@ -59,9 +59,20 @@ async function injectPrompt(tabId, text) {
       (function tryInject() {
         const promptDiv = document.querySelector("#prompt-textarea");
         if (promptDiv) {
-          promptDiv.innerHTML   = "<p>" + payload.replace(/\n/g, '</p><p>') + "</p>";
+          promptDiv.innerHTML = "<p>" + payload.replace(/\n/g, '</p><p>') + "</p>";
           promptDiv.dispatchEvent(new InputEvent("input", { bubbles: true }));
           promptDiv.focus();
+          // Scroll to bottom and place cursor at end
+          promptDiv.scrollTop = promptDiv.scrollHeight;
+          // Move cursor to end
+          if (window.getSelection && document.createRange) {
+            const range = document.createRange();
+            range.selectNodeContents(promptDiv);
+            range.collapse(false); // to end
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+          }
         } else if (++tries < MAX_TRIES) {
           setTimeout(tryInject, INTERVAL);
         }
@@ -105,18 +116,57 @@ async function openChatGPTWithData(data) {
   await injectPrompt(tab.id, message);
 }
 
+// Helper: open ChatGPT, inject prompt, then inject publisher.js to monitor and POST answer
+async function openChatGPTAndPublish(data) {
+  const { prompt, model } = await loadSettings();
+  const message = `${prompt}\n\n---\n## Video Title: ${data.title}\n## URL: ${data.url}\n## Transcript\n${data.transcript}`;
+
+  // Look for an existing ChatGPT tab first
+  //const existingTabs = await chrome.tabs.query({ url: `${CHATGPT_ORIGIN}/*` });
+  //let tab = existingTabs[0];
+  let tab = null;
+
+  if (!tab) {
+    tab = await chrome.tabs.create({ url: `${CHATGPT_ORIGIN}/?model=${model}` });
+    await new Promise((resolve) => {
+      const listener = (updatedTabId, info) => {
+        if (updatedTabId === tab.id && info.status === "complete") {
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    });
+  } else {
+    await chrome.tabs.update(tab.id, { active: true });
+  }
+
+  await injectPrompt(tab.id, message);
+  // Inject publisher.js to monitor for answer and POST to server
+  await chrome.scripting.executeScript({
+    target: { tabId: tab.id },
+    files: ["publisher.js"]
+  });
+}
+
 // ---------------------------------------------------------------------------
 // COMMAND HANDLER (keyboard shortcut defined in manifest → commands)
 // ---------------------------------------------------------------------------
 chrome.commands.onCommand.addListener(async (command, tab) => {
-  if (command !== "summarize-video" || !tab?.id) return;
+  if (!tab?.id) return;
 
   try {
-    // Ask content script for the video data (title + transcript)
-    const videoData = await chrome.tabs.sendMessage(tab.id, { action: "getVideoData" });
-    if (!videoData) return; // either not a YouTube video or content script errored
-
-    await openChatGPTWithData(videoData);
+    if (command === "summarize-video") {
+      // Ask content script for the video data (title + transcript)
+      const videoData = await chrome.tabs.sendMessage(tab.id, { action: "getVideoData" });
+      if (!videoData) return;
+      await openChatGPTWithData(videoData);
+    } else if (command === "publish-transcript") {
+      // Ask content script for the video data (title + transcript)
+      const videoData = await chrome.tabs.sendMessage(tab.id, { action: "getVideoData" });
+      if (!videoData) return;
+      await openChatGPTAndPublish(videoData);
+    }
   } catch (err) {
     // Likely no content script (user isn’t on youtube.com/watch)
     console.warn("YouTube → ChatGPT: cannot collect video data – are you on a watch page?", err);

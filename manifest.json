@@ -36,6 +36,13 @@
           "mac": "Command+Shift+X"
         },
         "description": "Summarize the current YouTube video with ChatGPT"
+      },
+      "publish-transcript": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+Y",
+          "mac": "Command+Shift+Y"
+        },
+        "description": "Send YouTube transcript to ChatGPT and publish answer to server"
       }
     },
     "options_page": "options.html"
