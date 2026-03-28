@@ -12,7 +12,8 @@
     "permissions": [
       "tabs",
       "scripting",
-      "storage"
+      "storage",
+      "clipboardWrite"
     ],
     "host_permissions": [
       "https://www.youtube.com/*",
@@ -43,6 +44,13 @@
           "mac": "Command+Shift+Y"
         },
         "description": "Send YouTube transcript to ChatGPT and publish answer to server"
+      },
+      "copy-transcript": {
+        "suggested_key": {
+          "default": "Ctrl+Shift+C",
+          "mac": "Command+Shift+C"
+        },
+        "description": "Copy the YouTube video transcript to clipboard"
       }
     },
     "options_page": "options.html"

@@ -117,6 +117,11 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
   if (!tab?.id) return;
 
   try {
+    if (command === "copy-transcript") {
+      await chrome.tabs.sendMessage(tab.id, { action: "copyTranscript" });
+      return;
+    }
+
     if (command === "summarize-video" || command === "publish-transcript") {
       // Ask content script for the video data (title + transcript)
       const videoData = await chrome.tabs.sendMessage(tab.id, { action: "getVideoData" });
