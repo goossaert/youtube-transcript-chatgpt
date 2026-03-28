@@ -91,7 +91,10 @@ async function ensureTranscriptPanelOpen() {
     clickTarget.scrollIntoView({ block: "center" });
     clickTarget.click();
 
-    await waitFor(() => document.querySelector("ytd-transcript-renderer"));
+    await waitFor(() =>
+      document.querySelector("ytd-transcript-renderer") ||
+      document.querySelector("transcript-segment-view-model")
+    );
     return;
   }
 
@@ -108,7 +111,10 @@ async function ensureTranscriptPanelOpen() {
   if (!transcriptItem) throw new Error("Transcript option not present in menu");
   transcriptItem.click();
 
-  await waitFor(() => document.querySelector("ytd-transcript-renderer"));
+  await waitFor(() =>
+    document.querySelector("ytd-transcript-renderer") ||
+    document.querySelector("transcript-segment-view-model")
+  );
 }
 
 /** Waits (up to timeout ms) for a dedicated “Show transcript” button to appear and returns it. */
@@ -142,22 +148,36 @@ function findShowTranscriptButton() {
 
 async function scrapeTranscript() {
   try {
+    // ── Old view ──────────────────────────────────────────────
     const panel = document.querySelector("ytd-transcript-renderer");
-    if (!panel) throw new Error("Transcript panel not open (DOM element missing)");
+    if (panel) {
+      // Ensure every segment is rendered (lazy‑load otherwise)
+      panel.scrollTo({ top: panel.scrollHeight });
+      await delay(400);
 
-    // Ensure every segment is rendered (lazy‑load otherwise)
-    panel.scrollTo({ top: panel.scrollHeight });
-    await delay(400);
+      const segments = panel.querySelectorAll("ytd-transcript-segment-renderer");
+      if (!segments.length) throw new Error("No transcript segments found");
 
-    const segments = panel.querySelectorAll("ytd-transcript-segment-renderer");
-    if (!segments.length) throw new Error("No transcript segments found");
+      return Array.from(segments)
+        .map(seg => {
+          const [timestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
+          return `${timestamp || ""} ${rest.join(" ")}`.trim();
+        })
+        .join("\n");
+    }
 
-    return Array.from(segments)
-      .map(seg => {
-        const [timestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
-        return `${timestamp || ""} ${rest.join(" ")}`.trim();
-      })
-      .join("\n");
+    // ── New view (transcript-segment-view-model) ──────────────
+    const newSegments = document.querySelectorAll("transcript-segment-view-model");
+    if (newSegments.length) {
+      return Array.from(newSegments)
+        .map(seg => {
+          const [timestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
+          return `${timestamp || ""} ${rest.join(" ")}`.trim();
+        })
+        .join("\n");
+    }
+
+    throw new Error("Transcript panel not open (DOM element missing)");
   } catch (err) {
     console.warn("Transcript scrape failed:", err);
     return "<Transcript unavailable>";
