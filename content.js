@@ -171,9 +171,8 @@ async function scrapeTranscript() {
     if (newSegments.length) {
       return Array.from(newSegments)
         .map(seg => {
-          const [rawTimestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
-          const timestamp = (rawTimestamp || "").match(/\d+:\d+(?::\d+)?/)?.[0] || rawTimestamp || "";
-          const text = rest.filter(s => !/\b(?:hours?|minutes?|seconds?)\b/i.test(s)).join(" ");
+          const timestamp = seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp")?.innerText?.trim() || "";
+          const text = seg.querySelector(".yt-core-attributed-string")?.innerText?.trim() || "";
           return `${timestamp} ${text}`.trim();
         })
         .join("\n");
