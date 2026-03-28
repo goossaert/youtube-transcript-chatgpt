@@ -171,8 +171,9 @@ async function scrapeTranscript() {
     if (newSegments.length) {
       return Array.from(newSegments)
         .map(seg => {
-          const [timestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
-          return `${timestamp || ""} ${rest.join(" ")}`.trim();
+          const [rawTimestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
+          const timestamp = (rawTimestamp || "").match(/\d+:\d+(?::\d+)?/)?.[0] || rawTimestamp || "";
+          return `${timestamp} ${rest.join(" ")}`.trim();
         })
         .join("\n");
     }
