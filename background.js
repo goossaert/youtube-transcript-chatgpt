@@ -9,7 +9,7 @@ const CHATGPT_ORIGIN = "https://chat.openai.com";
  */
 function loadSettings() {
   return new Promise((resolve) => {
-    chrome.storage.sync.get(
+    chrome.storage.local.get(
       {
         prompts: [
           { name: "Default", content: "Summarize this video", default: true }

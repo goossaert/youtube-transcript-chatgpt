@@ -64,7 +64,7 @@ sendWallabagEl.addEventListener("change", () => {
 });
 
 // Load
-chrome.storage.sync.get({
+chrome.storage.local.get({
   prompts: [
     { name: "Default", content: "Summarize this video", default: true }
   ],
@@ -98,7 +98,7 @@ document.getElementById("save").addEventListener("click", () => {
     alert("Please select a default prompt.");
     return;
   }
-  chrome.storage.sync.set({
+  chrome.storage.local.set({
     prompts,
     model: modelEl.value,
     sendPublisher: sendPublisherEl.checked,
@@ -109,6 +109,11 @@ document.getElementById("save").addEventListener("click", () => {
     wallabagUsername: wallabagUsernameEl.value,
     wallabagPassword: wallabagPasswordEl.value,
     publisherUrl: publisherUrlEl.value
+  }, () => {
+    if (chrome.runtime.lastError) {
+      alert("Save failed: " + chrome.runtime.lastError.message);
+    } else {
+      alert("Saved ✅ — remember you can change the shortcut in chrome://extensions/shortcuts");
+    }
   });
-  alert("Saved ✅ — remember you can change the shortcut in chrome://extensions/shortcuts");
 });
