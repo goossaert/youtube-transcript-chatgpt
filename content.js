@@ -151,6 +151,7 @@ async function scrapeTranscript() {
     // ── Old view ──────────────────────────────────────────────
     const panel = document.querySelector("ytd-transcript-renderer");
     if (panel) {
+      console.log("[YT→GPT] scrapeTranscript: using OLD view (ytd-transcript-renderer)");
       // Ensure every segment is rendered (lazy‑load otherwise)
       panel.scrollTo({ top: panel.scrollHeight });
       await delay(400);
@@ -158,24 +159,29 @@ async function scrapeTranscript() {
       const segments = panel.querySelectorAll("ytd-transcript-segment-renderer");
       if (!segments.length) throw new Error("No transcript segments found");
 
-      return Array.from(segments)
+      const result = Array.from(segments)
         .map(seg => {
           const [timestamp, ...rest] = seg.innerText.split("\n").map(s => s.trim()).filter(Boolean);
           return `${timestamp || ""} ${rest.join(" ")}`.trim();
         })
         .join("\n");
+      console.log("[YT→GPT] OLD view sample:", result.slice(0, 300));
+      return result;
     }
 
     // ── New view (transcript-segment-view-model) ──────────────
     const newSegments = document.querySelectorAll("transcript-segment-view-model");
     if (newSegments.length) {
-      return Array.from(newSegments)
+      console.log("[YT→GPT] scrapeTranscript: using NEW view (transcript-segment-view-model), count:", newSegments.length);
+      const result = Array.from(newSegments)
         .map(seg => {
           const timestamp = seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp")?.innerText?.trim() || "";
-          const text = seg.querySelector(".yt-core-attributed-string")?.innerText?.trim() || "";
+          const text = seg.querySelector(".ytAttributedStringHost")?.innerText?.trim() || "";
           return `${timestamp} ${text}`.trim();
         })
         .join("\n");
+      console.log("[YT→GPT] NEW view sample:", result.slice(0, 300));
+      return result;
     }
 
     throw new Error("Transcript panel not open (DOM element missing)");
