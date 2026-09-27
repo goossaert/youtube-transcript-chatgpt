@@ -42,7 +42,7 @@
     const cleanedAnswerHtml = cleanDataStartEnd(answerHtml);
     console.log('[publisher.js] handleAnswer called. Title:', title);
     //console.log('[publisher.js] Answer HTML:', cleanedAnswerHtml);
-    chrome.storage.sync.get({
+    chrome.storage.local.get({
       sendPublisher: true,
       sendWallabag: false,
       wallabagUrl: '',

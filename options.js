@@ -68,7 +68,7 @@ chrome.storage.local.get({
   prompts: [
     { name: "Default", content: "Summarize this video", default: true }
   ],
-  model: "gpt-4o",
+  model: "",
   sendPublisher: true,
   sendWallabag: false,
   wallabagUrl: "",

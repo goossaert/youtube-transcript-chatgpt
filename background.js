@@ -1,7 +1,7 @@
 // background.js – Manifest v3
 // ===========================
 
-const CHATGPT_ORIGIN = "https://chat.openai.com";
+const CHATGPT_ORIGIN = "https://chatgpt.com";
 
 /**
  * Retrieve user‑settings (prompts array + preferred model) stored via options page.
@@ -14,7 +14,7 @@ function loadSettings() {
         prompts: [
           { name: "Default", content: "Summarize this video", default: true }
         ],
-        model: "gpt-4o"
+        model: ""
       },
       (items) => resolve(items)
     );
@@ -26,37 +26,96 @@ function loadSettings() {
  * Injects `text` into ChatGPT’s textarea inside the given tab.
  */
 async function injectPrompt(tabId, text) {
-  await chrome.scripting.executeScript({
-    target: { tabId },
-    args: [text],
-    func: (payload) => {
-      const INTERVAL = 100;      // ms between retries
-      const MAX_TRIES = 40;      // ≈ 4 s total
+  const deadline = Date.now() + 45000;
+  while (Date.now() < deadline) {
+    try {
+      const [{ result }] = await chrome.scripting.executeScript({
+        target: { tabId },
+        world: 'MAIN',
+        args: [text],
+        func: async (payload) => {
+          const selector = '.ProseMirror[data-composer-markdown][contenteditable="true"], [role="textbox"][aria-label="Ask ChatGPT"][contenteditable="true"], #prompt-textarea, #mobile-composer-prompt, textarea[aria-label="Chat with ChatGPT"], textarea[data-testid*="composer"]';
+          const editor = [...document.querySelectorAll(selector)]
+            .find(el => el.getClientRects().length && !el.closest('[hidden]'));
+          if (!editor) return false;
 
-      let tries = 0;
-      (function tryInject() {
-        const promptDiv = document.querySelector("#prompt-textarea");
-        if (promptDiv) {
-          promptDiv.innerHTML = "<p>" + payload.replace(/\n/g, '</p><p>') + "</p>";
-          promptDiv.dispatchEvent(new InputEvent("input", { bubbles: true }));
-          promptDiv.focus();
-          // Scroll to bottom and place cursor at end
-          promptDiv.scrollTop = promptDiv.scrollHeight;
-          // Move cursor to end
-          if (window.getSelection && document.createRange) {
+          editor.focus();
+          if (editor instanceof HTMLTextAreaElement) {
+            const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set;
+            setter.call(editor, payload);
+            editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: payload }));
+            editor.setSelectionRange(payload.length, payload.length);
+          } else if (editor.isContentEditable) {
+            const selection = window.getSelection();
             const range = document.createRange();
-            range.selectNodeContents(promptDiv);
-            range.collapse(false); // to end
-            const sel = window.getSelection();
-            sel.removeAllRanges();
-            sel.addRange(range);
+            range.selectNodeContents(editor);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            document.execCommand('insertText', false, payload);
+          } else {
+            return false;
           }
-        } else if (++tries < MAX_TRIES) {
-          setTimeout(tryInject, INTERVAL);
+
+          // ChatGPT may replace the composer during hydration or a React render.
+          await new Promise(resolve => setTimeout(resolve, 700));
+          if (!editor.isConnected) return false;
+          const actual = editor instanceof HTMLTextAreaElement ? editor.value : editor.innerText;
+          const normalize = value => value.replace(/\s+/g, ' ').trim();
+          return normalize(actual) === normalize(payload);
         }
-      })();
+      });
+      if (result) return;
+    } catch (error) {
+      // A navigation can destroy the frame while the injection is in progress.
+      if (!/frame.*(removed|navigat|unload)|document was unloaded/i.test(error.message)) throw error;
     }
-  });
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+  throw new Error('Could not keep the prompt in the ChatGPT composer');
+}
+
+async function injectPromptWithError(tabId, text) {
+  try {
+    await injectPrompt(tabId, text);
+  } catch (error) {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      func: (message) => {
+        const notice = document.createElement('div');
+        notice.textContent = `YouTube → ChatGPT: ${message}`;
+        notice.style.cssText = 'position:fixed;top:16px;right:16px;z-index:2147483647;padding:12px 16px;background:#9b1c1c;color:white;border-radius:8px;font:14px sans-serif;max-width:400px';
+        document.body.appendChild(notice);
+      },
+      args: [error.message]
+    }).catch(() => {});
+    throw error;
+  }
+}
+
+async function createChatGPTTab(model) {
+  const url = new URL(CHATGPT_ORIGIN);
+  if (model) url.searchParams.set('model', model);
+  const tab = await chrome.tabs.create({ url: url.toString() });
+  if (tab.status !== 'complete') {
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        chrome.tabs.onUpdated.removeListener(listener);
+        reject(new Error('ChatGPT page did not finish loading'));
+      }, 30000);
+      const listener = (id, info) => {
+        if (id === tab.id && info.status === 'complete') {
+          clearTimeout(timeout);
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+      chrome.tabs.get(tab.id).then(current => {
+        if (current.status === 'complete') listener(tab.id, { status: 'complete' });
+      }).catch(reject);
+    });
+  }
+  return tab;
 }
 
 /**
@@ -66,44 +125,15 @@ async function injectPrompt(tabId, text) {
 async function openChatGPTWithData(data, promptContent, model) {
   const message = `${promptContent}\n\n---\n## Video Title: ${data.title}\n## URL: ${data.url}\n## Transcript\n${data.transcript}`;
 
-  // Look for an existing ChatGPT tab first
-  const existingTabs = await chrome.tabs.query({ url: `${CHATGPT_ORIGIN}/*` });
-  let tab = existingTabs[0];
-
-  if (!tab) {
-    // No tab → create one with model query param so ChatGPT pre‑selects it
-    tab = await chrome.tabs.create({ url: `${CHATGPT_ORIGIN}/?model=${model}` });
-    await new Promise((resolve) => {
-      const listener = (updatedTabId, info) => {
-        if (updatedTabId === tab.id && info.status === "complete") {
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve();
-        }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
-    });
-  } else {
-    await chrome.tabs.update(tab.id, { active: true });
-  }
-
-  await injectPrompt(tab.id, message);
+  const tab = await createChatGPTTab(model);
+  await injectPromptWithError(tab.id, message);
 }
 
 // Helper: open ChatGPT, inject prompt, then inject publisher.js to monitor and POST answer
 async function openChatGPTAndPublish(data, promptContent, model) {
   const message = `${promptContent}\n\n---\n## Video Title: ${data.title}\n## URL: ${data.url}\n## Transcript\n${data.transcript}`;
-  let tab = null;
-  tab = await chrome.tabs.create({ url: `${CHATGPT_ORIGIN}/?model=${model}` });
-  await new Promise((resolve) => {
-    const listener = (updatedTabId, info) => {
-      if (updatedTabId === tab.id && info.status === "complete") {
-        chrome.tabs.onUpdated.removeListener(listener);
-        resolve();
-      }
-    };
-    chrome.tabs.onUpdated.addListener(listener);
-  });
-  await injectPrompt(tab.id, message);
+  const tab = await createChatGPTTab(model);
+  await injectPromptWithError(tab.id, message);
   await chrome.scripting.executeScript({
     target: { tabId: tab.id },
     files: ["publisher.js"]
@@ -126,6 +156,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
       // Ask content script for the video data (title + transcript)
       const videoData = await chrome.tabs.sendMessage(tab.id, { action: "getVideoData" });
       if (!videoData) return;
+      if (videoData.error) throw new Error(videoData.error);
       // Load prompts
       const { prompts, model } = await loadSettings();
       // Ask content script to show overlay and select prompt
@@ -148,6 +179,7 @@ chrome.commands.onCommand.addListener(async (command, tab) => {
     }
   } catch (err) {
     // Likely no content script (user isn’t on youtube.com/watch)
-    console.warn("YouTube → ChatGPT: cannot collect video data – are you on a watch page?", err);
+    console.warn("YouTube → ChatGPT:", err);
+    chrome.tabs.sendMessage(tab.id, { action: 'showError', message: err.message }).catch(() => {});
   }
 });

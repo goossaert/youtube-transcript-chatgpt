@@ -40,22 +40,24 @@ function getCanonicalYouTubeUrl (rawUrl) {
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.action !== "getVideoData") return;
 
+  if (location.pathname !== '/watch') {
+    sendResponse({ error: 'Open a YouTube video before using this shortcut' });
+    return;
+  }
+
   (async () => {
     const title = document.title.replace(/ - YouTube$/, "");
     //const url   = location.href;
     const url   = getCanonicalYouTubeUrl(location.href);
 
     try {
-      // 1️⃣ Reveal extra description controls so the Show‑transcript button is present (if any)
       await ensureDescriptionExpanded();
-      // 2️⃣ Open the transcript side‑panel (new or classic UI)
       await ensureTranscriptPanelOpen();
-    } catch (e) {
-      console.warn("Could not open transcript automatically:", e);
+      const transcript = await scrapeTranscript();
+      sendResponse({ title, url, transcript });
+    } catch (error) {
+      sendResponse({ error: error.message });
     }
-
-    const transcript = await scrapeTranscript();
-    sendResponse({ title, url, transcript });
   })();
 
   return true; // keep the port open for the async response
@@ -65,23 +67,22 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 /** Clicks the “More” link in the description so all meta‑data becomes visible. */
 async function ensureDescriptionExpanded() {
-  const expandBtn = Array.from(
-    document.querySelectorAll("tp-yt-paper-button, yt-formatted-string, ytd-button-renderer")
-  ).find(el => /\bmore\b/i.test(el.innerText) && el.offsetParent !== null);
-
-  if (expandBtn) {
+  const expandBtn = document.querySelector(
+    'ytd-watch-metadata #description-inline-expander #expand, #description-inline-expander #expand'
+  );
+  if (expandBtn && expandBtn.getClientRects().length) {
     expandBtn.click();
-    await delay(300); // allow extra DOM to materialise
+    await delay(300);
   }
 }
 
 /** Opens the transcript panel using either the dedicated button *or* the overflow menu. */
 async function ensureTranscriptPanelOpen() {
   // If panel already exists, nothing to do
-  if (document.querySelector("ytd-transcript-renderer")) return;
+  if (hasTranscriptSegments()) return;
 
   // -------- 1️⃣ New UI: dedicated “Show transcript” button --------
-  const showBtn = await waitForShowTranscriptButton(2500);
+  const showBtn = await waitForShowTranscriptButton(4000);
   if (showBtn) {
     const clickTarget = showBtn.tagName === "YTD-BUTTON-RENDERER"
       ? showBtn.querySelector("button") || showBtn
@@ -91,10 +92,9 @@ async function ensureTranscriptPanelOpen() {
     clickTarget.scrollIntoView({ block: "center" });
     clickTarget.click();
 
-    await waitFor(() =>
-      document.querySelector("ytd-transcript-renderer") ||
-      document.querySelector("transcript-segment-view-model")
-    );
+    await waitFor(hasTranscriptSegments, 12000).catch(() => {
+      throw new Error('YouTube did not load a transcript for this video');
+    });
     return;
   }
 
@@ -111,10 +111,9 @@ async function ensureTranscriptPanelOpen() {
   if (!transcriptItem) throw new Error("Transcript option not present in menu");
   transcriptItem.click();
 
-  await waitFor(() =>
-    document.querySelector("ytd-transcript-renderer") ||
-    document.querySelector("transcript-segment-view-model")
-  );
+  await waitFor(hasTranscriptSegments, 12000).catch(() => {
+    throw new Error('YouTube did not load a transcript for this video');
+  });
 }
 
 /** Waits (up to timeout ms) for a dedicated “Show transcript” button to appear and returns it. */
@@ -136,20 +135,25 @@ function waitForShowTranscriptButton(timeout = 0) {
 
 /** Looks for the dedicated “Show transcript” button under the description. */
 function findShowTranscriptButton() {
-  const elements = document.querySelectorAll("button, ytd-button-renderer");
+  const elements = document.querySelectorAll('button[aria-label], ytd-button-renderer');
   for (const el of elements) {
     const label = (el.getAttribute("aria-label") || "") + " " + (el.innerText || "");
-    if (/show\s+transcript/i.test(label)) return el;
+    if (/show\s+transcript/i.test(label) && el.getClientRects().length && !el.closest('[hidden]')) return el;
   }
   return null;
+}
+
+function hasTranscriptSegments() {
+  return [...document.querySelectorAll('ytd-transcript-segment-renderer, transcript-segment-view-model')]
+    .some(segment => segment.getClientRects().length > 0);
 }
 
 /********************** Transcript scraping *************************/
 
 async function scrapeTranscript() {
-  try {
     // ── Old view ──────────────────────────────────────────────
-    const panel = document.querySelector("ytd-transcript-renderer");
+    const panel = [...document.querySelectorAll('ytd-transcript-renderer')]
+      .find(el => el.getClientRects().length && el.querySelector('ytd-transcript-segment-renderer'));
     if (panel) {
       console.log("[YT→GPT] scrapeTranscript: using OLD view (ytd-transcript-renderer)");
       // Ensure every segment is rendered (lazy‑load otherwise)
@@ -165,30 +169,30 @@ async function scrapeTranscript() {
           return `${timestamp || ""} ${rest.join(" ")}`.trim();
         })
         .join("\n");
+      if (!result.trim()) throw new Error('Transcript has no text');
       console.log("[YT→GPT] OLD view sample:", result.slice(0, 300));
       return result;
     }
 
     // ── New view (transcript-segment-view-model) ──────────────
-    const newSegments = document.querySelectorAll("transcript-segment-view-model");
+    const newSegments = [...document.querySelectorAll("transcript-segment-view-model")]
+      .filter(segment => segment.getClientRects().length);
     if (newSegments.length) {
       console.log("[YT→GPT] scrapeTranscript: using NEW view (transcript-segment-view-model), count:", newSegments.length);
       const result = Array.from(newSegments)
         .map(seg => {
-          const timestamp = seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp")?.innerText?.trim() || "";
-          const text = seg.querySelector(".ytAttributedStringHost")?.innerText?.trim() || "";
+          const timestamp = seg.querySelector(".ytwTranscriptSegmentViewModelTimestamp, [class*='Timestamp']")?.innerText?.trim() || "";
+          const text = seg.querySelector(".ytAttributedStringHost, [class*='SegmentText']")?.innerText?.trim() || "";
           return `${timestamp} ${text}`.trim();
         })
+        .filter(Boolean)
         .join("\n");
       console.log("[YT→GPT] NEW view sample:", result.slice(0, 300));
+      if (!result.trim()) throw new Error('Transcript has no text');
       return result;
     }
 
-    throw new Error("Transcript panel not open (DOM element missing)");
-  } catch (err) {
-    console.warn("Transcript scrape failed:", err);
-    return "<Transcript unavailable>";
-  }
+    throw new Error("Transcript unavailable for this video");
 }
 
 /********************** Utility helpers *************************/
@@ -286,7 +290,16 @@ function showPromptOverlay(prompts) {
 
 // Listen for copy-transcript command
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.action === 'showError') {
+    showToast('YouTube → ChatGPT: ' + msg.message);
+    return;
+  }
   if (msg.action === 'copyTranscript') {
+    if (location.pathname !== '/watch') {
+      showToast('Open a YouTube video before copying its transcript');
+      sendResponse({ ok: false, error: 'Not a video page' });
+      return;
+    }
     (async () => {
       try {
         await ensureDescriptionExpanded();
@@ -297,7 +310,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: true });
       } catch (err) {
         showToast('Failed to copy transcript: ' + err.message);
-        sendResponse({ ok: false });
+        sendResponse({ ok: false, error: err.message });
       }
     })();
     return true;

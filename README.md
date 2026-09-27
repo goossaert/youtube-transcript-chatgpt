@@ -15,12 +15,13 @@ A Chrome extension that extracts the transcript from a YouTube video page and se
 
 1. Open Chrome and navigate to any video page on YouTube.
 2. Trigger the extension via the keyboard shortcut: Control+Shift+X on Windows and Command+Shift+X on Mac
-3. This will open the transcript panel on the video page, and copy your prompt along with the transcript into a newly open tab with the ChatGPT web interface.
-4. It can sometimes happen that the ChatGPT conversation will be empty. If that's the case, just go back to the tab of the video, and press the keyboard shortcut again.
+3. This opens the transcript panel and puts your prompt and the transcript into a new ChatGPT tab. Review the draft, then send it yourself.
+4. If the video has no transcript, the extension shows an error on the YouTube page.
+5. If ChatGPT cannot retain the draft, an error appears in the new ChatGPT tab. Reload the extension after updating its files.
 
 
 ## Options
 
-In the options panel of the extension, you can enter the prompt that you want to use for summarization, along with the OpenAI model that you want to select by default.
+In the options panel, you can enter prompts for summarization. The model slug is optional; leave it blank to use your ChatGPT default. ChatGPT may ignore model slugs it no longer supports.
 
 To change the keyboard shortcut, go to `chrome://extensions/shortcuts`
